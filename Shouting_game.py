@@ -69,6 +69,8 @@ class Enemy:
         self.direction = random.choice([-1, 1])
         self.change_direction_counter = 0 # 敵の移動判定のカウンターの初期化
         self.change_direction_threshold = random.randint(60, 180) # 敵の停止時間をランダム値で設定
+        self.image = pg.image.load("ex5/fig/doragon.3.png").convert_alpha()  # ドラゴンの画像をロード
+        self.image = pg.transform.rotozoom(self.image, 0, 0.05) # 画像のサイズを調整
 
     def move(self):
         """
@@ -88,8 +90,9 @@ class Enemy:
     def draw(self, screen: pg.Surface):
         """
         引数 screen：画面surface
+        ドラゴンの画像の描写
         """
-        pg.draw.rect(screen, RED, (self.x, self.y, self.width, self.height))
+        screen.blit(self.image, (self.x, self.y))  # 画像を描画
 
 
 class Bullet:
