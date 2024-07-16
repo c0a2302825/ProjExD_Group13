@@ -60,6 +60,9 @@ class Enemy:
     敵キャラを表示するクラス
     """
     def __init__(self):
+        """
+        敵キャラとして、ドラゴンの画像をロードする。
+        """
         self.width = 60
         self.height = 60
         self.x = random.randint(0, SCREEN_WIDTH - self.width)
@@ -109,7 +112,7 @@ class Bullet:
         move(): 弾を移動させる
         draw(screen): 弾を画面上に描画する
     """
-    def __init__(self, x:float, y:float, target_x:float, target_y:float):
+    def __init__(self, x:float, y:float, target_x:float, target_y:float, speed:float=5.0):
         """
         Bulletオブジェクトを初期化する。
 
@@ -118,13 +121,14 @@ class Bullet:
             y : 弾の初期y座標
             target_x : プレイヤーのx座標
             target_y : プレイヤーのy座標
+            speed : 弾の移動速度（デフォルトは5.0）
         """
         self.x = x
         self.y = y
+        self.speed = speed
         angle = math.atan2(target_y - y, target_x - x)
-        speed = 5
-        self.dx = math.cos(angle) * speed
-        self.dy = math.sin(angle) * speed
+        self.dx = math.cos(angle) * self.speed
+        self.dy = math.sin(angle) * self.speed
 
     def move(self):
         """弾を現在の速度に基づいて移動させる。"""
@@ -142,22 +146,7 @@ class Bullet:
         
 
 class OmniBullet:
-    """
-    プレイヤーが全方向に発射する弾のクラス。
-    属性:
-        bullets (list): 発射された弾を保持するリスト。
-    メソッド:
-        __init__(x, y): OmniBulletオブジェクトを初期化する。
-        move(): 全ての弾を移動させる。
-        draw(screen): 全ての弾を画面上に描画する。
-    """
     def __init__(self, x, y):
-        """
-        OmniBulletオブジェクトを初期化する。
-        引数:
-            x (float): 弾の初期x座標。
-            y (float): 弾の初期y座標。
-        """
         self.bullets = []
         speed = 5
         for angle in range(0, 360, 45):  # 45度間隔で全方向に弾を作成
@@ -165,29 +154,58 @@ class OmniBullet:
             dx = math.cos(radians) * speed
             dy = math.sin(radians) * speed
             self.bullets.append(Bullet(x, y, x + dx * 10, y + dy * 10))
+
     def move(self):
-        """
-        全ての弾を現在の速度に基づいて移動させる。
-        """
         for bullet in self.bullets:
             bullet.move()
+
     def draw(self, screen):
-        """
-        全ての弾を画面上に描画する。
-        引数:
-            screen (pygame.Surface): 描画対象の画面。
-        """
         for bullet in self.bullets:
             bullet.draw(screen)
+            
+
+class AdvancedEnemy(Enemy):
+    """
+    追尾攻撃を行う敵キャラクラス
+    """
+    def __init__(self):
+        super().__init__()
+        self.last_attack_time = pg.time.get_ticks()  # 最後の攻撃時間を初期化
+        self.attack_cooldown = 1000  # 攻撃クールダウンを1秒（1000ミリ秒）に設定
+        self.cut_in_image = pg.image.load("ex5/fig/doragon.3.png").convert_alpha()  # カットイン画像をロード
+        self.cut_in_image = pg.transform.rotozoom(self.cut_in_image, 0, 1.0)  # 画像のサイズを調整
+        self.has_cut_in = False  # カットインが行われたかどうかを管理するフラグ
+
+    def attack(self, player_x, player_y):
+        """
+        敵の攻撃処理
+        敵のhpが80%未満の時、一定間隔で攻撃される。
+        敵のhpが50%未満の時、画像をカットインさせ、敵の攻撃速度が増加する（1度だけ）。
+        """
+        current_time = pg.time.get_ticks()
+        if self.hp <= 80 and current_time - self.last_attack_time > self.attack_cooldown:
+            self.last_attack_time = current_time
+            return Bullet(self.x + self.width // 2, self.y + self.height // 2, player_x, player_y)
+        if self.hp <= 50:
+            if not self.has_cut_in:
+                self.has_cut_in = True
+                # カットイン表示
+                screen.blit(self.cut_in_image, (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+                pg.display.flip()
+                pg.time.wait(1000)  # カットインを表示する時間
+                self.attack_cooldown = 400  # 攻撃速度を増加させる
+            return None  # ここで return None を追加して、それ以外の場合は何も返さないようにする
+        return None
 
 
 def main():
     player = Player()
-    enemy = Enemy() # enemy関数の呼び出し
+    enemy = AdvancedEnemy() # enemy関数の呼び出し
     player_bullets = [] #プレイヤーと敵の弾を保持するリスト
     enemy_bullets = []
     clock = pg.time.Clock()
     omni_bullets = []  # 全方向攻撃の弾を保持するリスト
+
 
     running = True
     while running:
@@ -203,7 +221,7 @@ def main():
                 elif event.key == pg.K_z:  # Zキーで全方向攻撃
                     if player.sp >= 5:  # SPゲージが5以上の場合
                         omni_bullets.append(OmniBullet(player.x + player.width // 2, player.y + player.height // 2))
-                        player.sp -= 5  # SPゲージ5を消費して全方位攻撃
+                        player.sp -= 5
 
 
         keys = pg.key.get_pressed()
@@ -211,6 +229,11 @@ def main():
 
         enemy.move()
 
+        # 敵の攻撃処理
+        enemy_bullet = enemy.attack(player.x + player.width // 2, player.y + player.height // 2)
+        if enemy_bullet:
+            enemy_bullets.append(enemy_bullet)
+            
         if random.random() < 0.02: # 弾の発生
             # 画面の四辺からランダムに弾を発射
             side = random.choice(['top', 'bottom', 'left', 'right'])
@@ -231,6 +254,17 @@ def main():
             target_y = GAME_AREA_Y + GAME_AREA_SIZE // 2
             enemy_bullets.append(Bullet(x, y, target_x, target_y))
         
+        # プレイヤーの弾の移動と当たり判定
+        for bullet in player_bullets[:]: # 弾の動きと衝突
+            bullet.move()
+            if bullet.y < 0:
+                player_bullets.remove(bullet)
+            elif (enemy.x < bullet.x < enemy.x + enemy.width and
+                  enemy.y < bullet.y < enemy.y + enemy.height):
+                enemy.hp -= 10 # 敵HPの更新
+                player.sp += 5 # プレイヤーSPの更新
+                player_bullets.remove(bullet)
+
         # 全方向攻撃の弾の移動と当たり判定
         for omni in omni_bullets[:]:
             for bullet in omni.bullets[:]:
@@ -245,17 +279,6 @@ def main():
             if not omni.bullets:
                 omni_bullets.remove(omni)
         
-        # プレイヤーの弾の移動と当たり判定
-        for bullet in player_bullets[:]: # 弾の動きと衝突
-            bullet.move()
-            if bullet.y < 0:
-                player_bullets.remove(bullet)
-            elif (enemy.x < bullet.x < enemy.x + enemy.width and
-                  enemy.y < bullet.y < enemy.y + enemy.height):
-                enemy.hp -= 10 # 敵HPの更新
-                player.sp += 5 # プレイヤーSPの更新
-                player_bullets.remove(bullet)
-
         # 敵の弾の移動と当たり判定
         for bullet in enemy_bullets[:]:
             bullet.move()
@@ -278,9 +301,8 @@ def main():
         enemy.draw(screen)
         for bullet in player_bullets + enemy_bullets: # 弾の描画
             bullet.draw(screen)
-        for omni in omni_bullets:
+        for omni in omni_bullets: # 全方向攻撃の玉の描写
             omni.draw(screen)
-
 
         pg.draw.rect(screen, RED, (10, SCREEN_HEIGHT - 30, player.hp * 2, 20)) # プレイヤーHPのゲージを表示
         pg.draw.rect(screen, GREEN, (10, 10, enemy.hp * 2, 20)) # 敵HPのゲージを表示
